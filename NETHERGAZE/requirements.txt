@@ -1,0 +1,30 @@
+# Core computer vision and image processing
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
+numpy>=1.24.0
+Pillow>=10.0.0
+
+# 3D graphics and rendering
+pygame>=2.5.0
+OpenGL>=3.1.0
+PyOpenGL>=3.1.0
+PyOpenGL-accelerate>=3.1.0
+
+# Mathematical computations
+scipy>=1.11.0
+matplotlib>=3.7.0
+
+# Video processing
+imageio>=2.31.0
+imageio-ffmpeg>=0.4.9
+
+# GUI framework (optional)
+# tkinter  # Usually included with Python
+
+# Development and testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Code quality
+black>=23.0.0
+flake8>=6.0.0

@@ -1,0 +1,7 @@
+# Placeholder for MVP System Diagram
+
+This file should contain the MVP system diagram showing the complete pipeline:
+
+Video Input → Frame Capture → Marker Detection → Pose Estimation → Overlay Rendering → Display
+
+TODO: Create actual diagram image file
