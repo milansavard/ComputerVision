@@ -2,68 +2,66 @@
 
 ## Project Description
 
-NETHERGAZE is a computer vision project that implements real-time marker detection and augmented reality overlay rendering.
+NETHERGAZE is a markerless tracking toolkit built to power immersive AR overlays using feature-based vision pipelines.
 
 ## System Architecture
 
 ### High-Level Components
 
-1. **Video Processing Module** (`video.py`)
-   - Handles video input capture and preprocessing
-   - Manages camera/video file input
-   - Applies frame preprocessing operations
+1. **Video Processing (`video.py`)**
+   - Camera capture and frame preprocessing
+   - Backend selection logic (AVFoundation, V4L2, etc.)
 
-2. **Marker Detection Module** (`marker_detect.py`)
-   - Detects ArUco markers in video frames
-   - Extracts marker corners and IDs
-   - Handles marker tracking across frames
+2. **Tracking Subpackage (`tracking/`)**
+   - `feature.py`: ORB / GFTT-based keypoint detection, LK optical-flow updates, keyframe management for markerless tracking
+   - Future modules: learned feature extraction, dense optical flow, global map management
 
-3. **Pose Estimation Module** (`pose.py`)
-   - Estimates camera pose from detected markers
-   - Implements Perspective-n-Point (PnP) solving
-   - Manages coordinate transformations
+3. **Pose Estimation (`pose.py`)**
+   - Camera calibration loading (inline config or external JSON)
+   - Essential-matrix based pose recovery for feature tracks
+   - Optional PnP support for future reference targets
+   - Temporal filtering and refinement (planned)
 
-4. **Overlay Rendering Module** (`overlay.py`)
-   - Renders virtual objects and overlays
-   - Handles 3D object projection
-   - Manages layer blending and compositing
+4. **Overlay Rendering (`overlay.py`)**
+   - 2D HUD overlays
+   - Optional 3D rendering pipeline (OpenGL / PyOpenGL)
+   - Compositing and blending strategies
 
-5. **User Interface Module** (`ui.py`)
-   - Provides user interaction controls
-   - Manages display and event handling
-   - Offers configuration options
+5. **User Interface (`ui.py`)**
+   - OpenCV window creation, event handling, control toggles
 
-6. **Utilities Module** (`utils.py`)
-   - Shared helper functions
-   - Configuration management
-   - Logging setup
+6. **Application Orchestration (`main.py`)**
+   - Future: runtime configuration, pipeline management, telemetry/logging hooks
+
+7. **Utilities (`utils.py`)**
+   - Configuration management, logging bootstrap, common helpers
 
 ## Data Flow
 
 ```
-Video Input → Frame Capture → Marker Detection → Pose Estimation → Overlay Rendering → Display
+Camera → VideoProcessor → FeatureTracker → Pose → Overlay → UI Display
 ```
 
 ## Technical Requirements
 
-- Python 3.8+
-- OpenCV for computer vision operations
-- OpenGL for 3D rendering
-- NumPy for numerical computations
+- Python 3.9+
+- `opencv-python` + `opencv-contrib-python` (ORB, optical flow)
+- NumPy / SciPy for math operations
+- PyOpenGL / pygame (planned for 3D overlays)
 
-## TODO: Implementation Details
+## Implementation Checklist
 
-- [ ] Camera calibration setup
-- [ ] Marker detection algorithms
-- [ ] Pose estimation implementation
-- [ ] 3D rendering pipeline
-- [ ] User interface design
-- [ ] Performance optimization
-- [ ] Error handling and robustness
+- [x] Video capture loop + UI shell
+- [x] Markerless tracking scaffold (`tracking.feature`)
+- [x] Camera calibration ingestion + PnP / Essential matrix pose solver
+- [ ] Pose refinement (temporal smoothing, bundle adjustment)
+- [ ] Overlay rendering MVP
+- [ ] SLAM-lite map for persistent markerless anchors
+- [ ] Full application orchestrator (`main.py`)
 
 ## Future Enhancements
 
-- Support for multiple marker types
-- Advanced 3D object rendering
-- Real-time performance optimization
-- Cross-platform compatibility improvements
+- Hybrid tracking mode that blends different feature sources (e.g., learned keypoints)
+- Multi-camera fusion
+- GPU-accelerated feature extraction and rendering
+- Configurable plugin architecture for custom trackers/overlays

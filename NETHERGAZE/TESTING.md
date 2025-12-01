@@ -186,19 +186,11 @@ if frame_count % 30 == 0:
 
 ---
 
-## Unit Tests (Future)
-
-Once unit tests are implemented:
+## Unit Tests
 
 ```bash
-# Run all tests
-pytest tests/
-
-# Run specific test file
-pytest tests/test_marker_detect.py
-
-# Run with coverage
-pytest --cov=src tests/
+cd /Users/milansavard/Desktop/GitHub/ComputerVision/NETHERGAZE
+python3 -m unittest tests/test_tracking_feature.py tests/test_pose.py
 ```
 
 ---
@@ -220,17 +212,16 @@ When more features are implemented, test these scenarios:
 - [ ] Window resizing works
 - [ ] Multiple runs don't leak resources
 
-### Marker Detection (Future)
-- [ ] ArUco markers are detected
-- [ ] Multiple markers can be tracked
-- [ ] Marker IDs are correctly identified
-- [ ] Detection works at various distances
-- [ ] Detection works at various angles
+### Markerless Tracking
+- [ ] Feature points remain tracked during motion
+- [ ] Optical flow handoff is smooth
+- [ ] Reacquisition works after rapid motion
+- [ ] Keyframe map maintains useful matches
 
 ### Pose Estimation (Future)
 - [ ] Pose is calculated correctly
-- [ ] Pose updates smoothly
-- [ ] Multiple marker poses work
+- [ ] Pose updates smoothly without jitter
+- [ ] Translation direction aligns with expected motion
 - [ ] Camera calibration affects results
 
 ### Overlay Rendering (Future)
@@ -244,11 +235,10 @@ When more features are implemented, test these scenarios:
 ## Known Limitations
 
 Current implementation:
-- No marker detection yet
-- No pose estimation yet
 - No overlay rendering yet
+- Pose relies on essential matrix (scale is ambiguous)
 - Basic video processing only
 - No recording functionality
-- No advanced preprocessing
+- Limited robustness in low-texture scenes
 
 These will be addressed in future implementations.

@@ -42,6 +42,8 @@ def get_config(config_path=None):
         'video_width': 640,
         'video_height': 480,
         'video_fps': 30,
+        'camera_backend_priority': None,
+        'camera_init_attempts': 10,
         
         # Preprocessing
         'enable_preprocessing': True,
@@ -49,9 +51,93 @@ def get_config(config_path=None):
         'contrast_alpha': 1.0,
         'brightness_beta': 0,
         
-        # Marker detection
-        'aruco_dict_type': 'DICT_4X4_50',
-        'marker_size': 0.05,  # meters
+        # Tracking
+        'axis_length': 0.05,  # meters, used for pose visualization
+        'feature_tracking': {
+            # Detector selection: 'orb', 'fast_brief', 'akaze', 'brisk', 'sift', 'gftt_orb'
+            'method': 'orb',
+            'max_features': 1000,
+            'quality_level': 0.01,
+            'min_distance': 7.0,
+            
+            # ORB-specific
+            'fast_threshold': 20,
+            'orb_scale_factor': 1.2,
+            'orb_nlevels': 8,
+            
+            # AKAZE-specific
+            'akaze_threshold': 0.001,
+            
+            # Optical flow
+            'use_optical_flow': True,
+            'optical_flow_win_size': 21,
+            'optical_flow_max_level': 3,
+            'optical_flow_criteria_eps': 0.03,
+            'optical_flow_criteria_count': 30,
+            'adaptive_optical_flow': True,  # Forward-backward consistency check
+            
+            # Keyframe management
+            'reacquire_threshold': 200,
+            'keyframe_interval': 15,
+            'max_keyframes': 6,
+            'min_keyframe_features': 160,
+            'keyframe_quality_threshold': 0.5,
+            
+            # Matching
+            'matcher_type': 'bf_hamming',  # 'bf_hamming', 'bf_l2', 'flann'
+            'match_ratio_threshold': 0.75,  # Lowe's ratio test
+            
+            # Grid-based detection for better feature distribution
+            'use_grid_detection': False,
+            'grid_rows': 4,
+            'grid_cols': 4,
+        },
+        
+        # Calibration / pose estimation
+        'calibration': {
+            'calibration_file': None,  # Optional path to JSON file with camera_matrix/dist_coeffs
+            'camera_matrix': [
+                [800.0, 0.0, 320.0],
+                [0.0, 800.0, 240.0],
+                [0.0, 0.0, 1.0],
+            ],
+            'dist_coeffs': [0.0, 0.0, 0.0, 0.0, 0.0],
+        },
+        
+        # Pose filtering/smoothing
+        'pose_filter': {
+            'enable_smoothing': True,
+            'smoothing_alpha': 0.3,  # EMA factor (0 = max smooth, 1 = no smooth)
+            'enable_outlier_rejection': True,
+            'max_translation_jump': 0.5,  # meters
+            'max_rotation_jump': 0.5,  # radians
+            'history_size': 10,
+            'use_median_filter': False,
+            'min_inliers_threshold': 10,
+        },
+        
+        # Scale estimation for markerless tracking
+        'scale_estimation': {
+            'method': 'auto',  # 'auto', 'known_distance', 'ground_plane', 'object_size', 'manual'
+            'manual_scale': 1.0,  # Scale factor when method='manual'
+            'known_distance': None,  # Known distance in meters (if available)
+            'ground_plane_height': 1.5,  # Expected camera height above ground (meters)
+            'reference_object_size': None,  # Known object size in meters
+            'scale_smoothing_alpha': 0.2,  # EMA factor for scale updates
+            'min_scale': 0.001,  # Minimum allowed scale
+            'max_scale': 100.0,  # Maximum allowed scale
+            'consistency_threshold': 0.5,  # Max allowed scale change ratio per frame
+        },
+        
+        # Overlay rendering
+        'overlay': {
+            'enable_2d_overlays': True,
+            'enable_3d_overlays': True,
+            'default_3d_color': [0, 255, 255],  # Cyan
+            'default_2d_color': [0, 255, 0],  # Green
+            'blend_alpha': 0.7,
+            'antialiasing': True,
+        },
         
         # Display
         'display_width': 640,

@@ -1,51 +1,60 @@
 # NETHERGAZE
 
-A computer vision project for real-time marker detection and augmented reality overlay rendering.
+An experimental computer-vision toolkit focused entirely on markerless tracking and augmented-reality overlays.
 
 ## Project Overview
 
-NETHERGAZE is a computer vision system that detects markers in video streams and renders virtual overlays in real-time.
+The project began as a marker-based demo. It has now shifted entirely to feature tracking and markerless pose estimation; the legacy marker path has been removed so development can concentrate on the markerless pipeline.
 
 ## Features
 
-- Real-time marker detection (ArUco markers)
-- Camera pose estimation
-- Virtual overlay rendering
-- Video input processing
-- User interface for interaction and control
+- Camera capture + preprocessing (`VideoProcessor`)
+- OpenCV-based UI with keyboard controls (`UserInterface`)
+- **Markerless tracking** (`tracking.feature.FeatureTracker`) with ORB detection, LK optical flow, and keyframe relocalisation
+- **Pose estimation** (`pose.PoseEstimator`) that consumes feature tracks and projects axes/overlays
+- Demo script that visualises tracked features and pose in real time
 
-## Setup Instructions
+## Getting Started
 
-1. Clone the repository
-2. Install dependencies: `pip install -r requirements.txt`
-3. Run the demo: `python examples/run_demo.py`
+```bash
+git clone https://github.com/.../ComputerVision.git
+cd ComputerVision/NETHERGAZE
+python3 -m venv .venv && source .venv/bin/activate  # recommended
+pip install -r requirements.txt
+```
 
-## Usage
+Run the live demo:
 
-The main entry point is `src/main.py` which orchestrates the complete pipeline.
+```bash
+python examples/run_demo.py
+```
 
-## Project Goals
+## Roadmap Highlights
 
-- Implement robust marker detection algorithms
-- Achieve real-time performance for camera pose estimation
-- Create seamless virtual overlay rendering
-- Provide an intuitive user interface
-- Ensure cross-platform compatibility
+- Refine pose smoothing and calibration workflows (capture tool, filtering)
+- Expand feature tracker (optical flow, keyframe maps, relocalisation)
+- Build overlay renderer capable of 2D/3D compositing
+- Wire everything together in `src/main.py` for a cohesive pipeline
+
+See `docs/design_overview.md` and `PROGRESS.md` for the detailed plan.
 
 ## Directory Structure
 
 ```
 NETHERGAZE/
-├── README.md             # Project overview, setup instructions, usage, goals
-├── requirements.txt      # Python package dependencies
-├── .gitignore            # Files/folders to be ignored by Git
-├── data/                 # Data files and sample content
-├── src/                  # Source code modules
-├── tests/                # Unit tests
-├── docs/                 # Documentation
-└── examples/             # Example scripts and demos
+├── README.md
+├── requirements.txt
+├── data/
+├── docs/
+├── examples/
+├── src/
+│   ├── tracking/
+│   └── ...
+└── tests/
 ```
 
-## Contributing
+## Contributing / Notes
 
-Please refer to the design documentation in `docs/design_overview.md` for detailed technical specifications.
+- Ensure `opencv-contrib-python` is installed for ORB/OpenCV extras.
+- Use virtual environments to avoid macOS “externally managed” Python issues.
+- Document experiments and findings in `docs/` as the markerless pipeline matures.
