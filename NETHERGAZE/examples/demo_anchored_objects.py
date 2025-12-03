@@ -137,13 +137,8 @@ class WorldAnchorSystem:
 class AnchoredObjectsDemo:
     """Demo showing world-anchored AR objects."""
     
-    def __init__(self, camera_id: int = 1, high_performance: bool = False):
+    def __init__(self, high_performance: bool = False):
         self.config = get_config()
-        
-        # Camera selection (default to Continuity Camera on index 1)
-        self.config["camera_id"] = camera_id
-        print(f"Using camera index: {camera_id}" + 
-              (" (Continuity Camera)" if camera_id == 1 else " (Webcam)" if camera_id == 0 else ""))
         
         # Performance tuning
         if high_performance:
@@ -625,13 +620,11 @@ class AnchoredObjectsDemo:
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="World-Anchored AR Demo")
-    parser.add_argument("--camera", "-c", type=int, default=1,
-                        help="Camera index (default: 1 for Continuity Camera, 0 for webcam)")
     parser.add_argument("--fast", action="store_true", 
                         help="High performance mode (60fps, more features)")
     args = parser.parse_args()
     
-    demo = AnchoredObjectsDemo(camera_id=args.camera, high_performance=args.fast)
+    demo = AnchoredObjectsDemo(high_performance=args.fast)
     demo.run()
 
 
