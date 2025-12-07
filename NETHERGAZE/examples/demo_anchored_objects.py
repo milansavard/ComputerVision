@@ -54,84 +54,72 @@ class WorldAnchorSystem:
     """
     Manages world-space anchoring for AR objects.
     
-    The key insight: we track camera pose RELATIVE to the first keyframe.
-    Objects placed in "world space" are actually relative to that first frame.
+    Simple approach: objects are stored in camera coordinates at placement time.
+    The current pose is used directly to render objects.
     """
     
     def __init__(self):
         self.is_anchored = False
-        self.anchor_pose: Optional[PoseResult] = None  # Pose when anchor was set
-        self.world_origin_set = False
         
-        # Accumulated camera pose (relative to world origin)
-        self.world_R = np.eye(3)  # World rotation
-        self.world_t = np.zeros((3, 1))  # World translation
-        
-        # Reference data from anchor frame
-        self.anchor_features = None
-        self.anchor_descriptors = None
+        # Current camera pose
+        self.current_R = np.eye(3)
+        self.current_t = np.zeros((3, 1))
         
     def set_anchor(self, pose: PoseResult, tracking_result):
         """Set the current view as the world origin."""
-        if pose is None or not pose.success:
-            return False
-            
         self.is_anchored = True
-        self.anchor_pose = pose
-        self.world_origin_set = True
-        
-        # Store reference features for re-localization
-        if tracking_result is not None:
-            self.anchor_features = tracking_result.keypoints.copy() if tracking_result.keypoints is not None else None
-            self.anchor_descriptors = tracking_result.descriptors.copy() if tracking_result.descriptors is not None else None
-        
-        # Reset world pose to identity (this is now "home")
-        self.world_R = np.eye(3)
-        self.world_t = np.zeros((3, 1))
-        
-        print("✓ Anchor set! Objects will now stay fixed in space.")
+        self.current_R = np.eye(3)
+        self.current_t = np.zeros((3, 1))
+        print("✓ Anchor set! Place objects with keys 1-5.")
         return True
     
     def reset_anchor(self):
         """Clear the anchor and start over."""
         self.is_anchored = False
-        self.anchor_pose = None
-        self.world_origin_set = False
-        self.world_R = np.eye(3)
-        self.world_t = np.zeros((3, 1))
+        self.current_R = np.eye(3)
+        self.current_t = np.zeros((3, 1))
         print("Anchor cleared. Press SPACE to set a new anchor.")
     
     def update_world_pose(self, current_pose: PoseResult) -> bool:
         """
-        Update the camera's position in world coordinates.
+        Update current camera pose.
         
-        Returns True if we have a valid world pose.
+        Returns True if we have a valid pose.
         """
-        if not self.is_anchored or current_pose is None or not current_pose.success:
+        if not self.is_anchored:
             return False
         
-        if current_pose.rotation_matrix is None or current_pose.translation_vector is None:
-            return False
-        
-        # The pose estimator gives us relative pose between frames
-        # We accumulate this to get world pose
-        # For simplicity, we use the current pose directly relative to anchor
-        self.world_R = current_pose.rotation_matrix
-        self.world_t = current_pose.translation_vector
+        # Always return True when anchored - we'll render with whatever pose we have
+        # Only update pose if we got a valid one
+        if current_pose is not None and current_pose.success:
+            if current_pose.rotation_matrix is not None:
+                # Blend with previous to reduce jitter
+                alpha = 0.3
+                self.current_R = alpha * current_pose.rotation_matrix + (1 - alpha) * self.current_R
+                # Re-orthonormalize
+                U, _, Vt = np.linalg.svd(self.current_R)
+                self.current_R = U @ Vt
+            if current_pose.translation_vector is not None:
+                alpha = 0.3
+                new_t = current_pose.translation_vector.reshape(3, 1)
+                self.current_t = alpha * new_t + (1 - alpha) * self.current_t
         
         return True
     
     def world_to_camera(self, world_point: np.ndarray) -> np.ndarray:
         """Transform a point from world coordinates to camera coordinates."""
-        # Camera sees: p_camera = R * p_world + t
         point = world_point.reshape(3, 1)
-        camera_point = self.world_R @ point + self.world_t
+        
+        # Clamp translation to reasonable bounds (objects shouldn't fly far away)
+        t_clamped = np.clip(self.current_t, -0.5, 0.5)
+        
+        # Transform: camera_point = R @ world_point + t
+        camera_point = self.current_R @ point + t_clamped
         return camera_point.flatten()
     
     def get_camera_position_in_world(self) -> np.ndarray:
         """Get the camera's position in world coordinates."""
-        # Camera position = -R^T * t
-        return (-self.world_R.T @ self.world_t).flatten()
+        return (-self.current_R.T @ self.current_t).flatten()
 
 
 class AnchoredObjectsDemo:
@@ -166,6 +154,7 @@ class AnchoredObjectsDemo:
             "pyramid": (255, 0, 255),   # Magenta
             "axes": (255, 255, 255),    # White
             "box": (0, 128, 255),       # Orange
+            "chair": (139, 90, 43),     # Brown/wood color
         }
         
         # Display options
@@ -176,6 +165,13 @@ class AnchoredObjectsDemo:
         # Tracking state
         self.last_tracking_result = None
         self.frame_count = 0
+        
+        # Statistics for pose info display
+        self.tracking_successes = 0
+        self.pose_successes = 0
+        self.fps = 0.0
+        self.last_frame_time = 0.0
+        self.feature_count = 0
 
     def initialize(self) -> bool:
         """Initialize all components."""
@@ -192,10 +188,14 @@ class AnchoredObjectsDemo:
         
         # Initialize tracker with enhanced settings for anchoring
         tracking_config = self.config.get("feature_tracking", {})
-        tracking_config["max_features"] = 2000  # More features = better anchoring
-        tracking_config["reacquire_threshold"] = 300  # Re-detect sooner if features drop
+        tracking_config["max_features"] = 3000  # More features = better anchoring
+        tracking_config["fast_threshold"] = 10  # Lower = more sensitive (default 20)
+        tracking_config["quality_level"] = 0.005  # Lower = accept weaker features (default 0.01)
+        tracking_config["min_distance"] = 5.0  # Allow features closer together (default 7)
+        tracking_config["reacquire_threshold"] = 500  # Re-detect sooner if features drop
         tracking_config["optical_flow_win_size"] = 25  # Larger window for better flow
-        tracking_config["keyframe_interval"] = 10  # More frequent keyframes
+        tracking_config["keyframe_interval"] = 8  # More frequent keyframes
+        tracking_config["orb_nlevels"] = 12  # More pyramid levels (default 8)
         self.tracker = FeatureTracker(tracking_config)
         print(f"✓ Feature tracker initialized (max {tracking_config['max_features']} features)")
         
@@ -222,7 +222,7 @@ class AnchoredObjectsDemo:
         print("1. Point camera at a textured surface (book, poster, etc.)")
         print("2. Wait for green 'TRACKING' indicator")
         print("3. Press SPACE to set the anchor point")
-        print("4. Press 1-4 to place objects")
+        print("4. Press 1-5 to place objects")
         print("5. Move camera around - objects stay in place!")
         print("")
         print("CONTROLS:")
@@ -231,6 +231,7 @@ class AnchoredObjectsDemo:
         print("  2 = Place pyramid")
         print("  3 = Place coordinate axes")
         print("  4 = Place solid box")
+        print("  5 = Place chair")
         print("  C = Clear all objects")
         print("  G = Toggle ground grid")
         print("  M = Toggle feature markers")
@@ -247,6 +248,8 @@ class AnchoredObjectsDemo:
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(window_name, 960, 720)
         
+        import time
+        
         while True:
             frame = self.video.capture_frame()
             if frame is None:
@@ -254,20 +257,39 @@ class AnchoredObjectsDemo:
             
             self.frame_count += 1
             
+            # Calculate FPS
+            current_time = time.time()
+            if self.last_frame_time > 0:
+                dt = current_time - self.last_frame_time
+                instant_fps = 1.0 / max(dt, 0.001)
+                self.fps = 0.9 * self.fps + 0.1 * instant_fps if self.fps > 0 else instant_fps
+            self.last_frame_time = current_time
+            
             # Track features
             tracking_result = self.tracker.process_frame(frame)
             self.last_tracking_result = tracking_result
+            
+            # Update feature count
+            if tracking_result is not None and tracking_result.keypoints is not None:
+                self.feature_count = len(tracking_result.keypoints)
             
             # Estimate pose
             pose = None
             if tracking_result is not None:
                 pose = self.pose_estimator.estimate_from_feature_tracks(tracking_result)
             
-            # Update world pose if anchored
-            tracking_good = pose is not None and pose.success
-            world_pose_valid = False
+            # Update statistics
+            tracking_good = tracking_result is not None and tracking_result.tracked_count > 0
+            pose_good = pose is not None and pose.success
             
-            if self.anchor_system.is_anchored and tracking_good:
+            if tracking_good:
+                self.tracking_successes += 1
+            if pose_good:
+                self.pose_successes += 1
+            
+            # Update world pose if anchored
+            world_pose_valid = False
+            if self.anchor_system.is_anchored and pose_good:
                 world_pose_valid = self.anchor_system.update_world_pose(pose)
             
             # Draw features
@@ -279,7 +301,7 @@ class AnchoredObjectsDemo:
                 frame = self._render_anchored_objects(frame, pose)
             
             # Draw UI
-            self._draw_status(frame, tracking_good, world_pose_valid)
+            self._draw_status(frame, pose_good, world_pose_valid)
             if self.show_help:
                 self._draw_help(frame)
             
@@ -319,6 +341,8 @@ class AnchoredObjectsDemo:
                 self._draw_axes(frame, camera_pos, obj.scale, pose)
             elif obj.object_type == "box":
                 self._draw_solid_box(frame, camera_pos, obj.scale, obj.color, pose)
+            elif obj.object_type == "chair":
+                self._draw_chair(frame, camera_pos, obj.scale, obj.color, pose)
         
         return frame
 
@@ -412,22 +436,111 @@ class AnchoredObjectsDemo:
             pts = pts_2d.astype(np.int32).reshape(-1, 1, 2)
             cv2.fillConvexPoly(frame, pts, face_color)
 
+    def _draw_chair(self, frame: np.ndarray, position: np.ndarray,
+                    scale: float, color: Tuple[int, int, int], pose: PoseResult):
+        """Draw a 3D wireframe chair."""
+        s = scale  # Overall scale
+        p = position
+        
+        # Chair dimensions
+        seat_h = s * 0.4      # Seat height from ground
+        seat_w = s * 0.8      # Seat width
+        seat_d = s * 0.7      # Seat depth
+        seat_t = s * 0.08     # Seat thickness
+        leg_w = s * 0.06      # Leg width
+        back_h = s * 0.9      # Backrest height from seat
+        back_t = s * 0.06     # Backrest thickness
+        
+        # 4 Legs (vertical lines from ground to seat)
+        legs = [
+            # Front-left leg
+            [[p[0]-seat_w/2+leg_w, p[1]+seat_h, p[2]+seat_d/2-leg_w],
+             [p[0]-seat_w/2+leg_w, p[1], p[2]+seat_d/2-leg_w]],
+            # Front-right leg
+            [[p[0]+seat_w/2-leg_w, p[1]+seat_h, p[2]+seat_d/2-leg_w],
+             [p[0]+seat_w/2-leg_w, p[1], p[2]+seat_d/2-leg_w]],
+            # Back-left leg
+            [[p[0]-seat_w/2+leg_w, p[1]+seat_h, p[2]-seat_d/2+leg_w],
+             [p[0]-seat_w/2+leg_w, p[1], p[2]-seat_d/2+leg_w]],
+            # Back-right leg
+            [[p[0]+seat_w/2-leg_w, p[1]+seat_h, p[2]-seat_d/2+leg_w],
+             [p[0]+seat_w/2-leg_w, p[1], p[2]-seat_d/2+leg_w]],
+        ]
+        
+        # Seat (rectangle at seat height)
+        seat_y = p[1] + seat_h
+        seat_verts = np.array([
+            [p[0]-seat_w/2, seat_y, p[2]-seat_d/2],
+            [p[0]+seat_w/2, seat_y, p[2]-seat_d/2],
+            [p[0]+seat_w/2, seat_y, p[2]+seat_d/2],
+            [p[0]-seat_w/2, seat_y, p[2]+seat_d/2],
+        ], dtype=np.float64)
+        seat_edges = [(0,1), (1,2), (2,3), (3,0)]
+        
+        # Backrest (vertical rectangle at back of seat)
+        back_bottom = seat_y
+        back_top = seat_y - back_h
+        back_verts = np.array([
+            [p[0]-seat_w/2, back_bottom, p[2]-seat_d/2],
+            [p[0]+seat_w/2, back_bottom, p[2]-seat_d/2],
+            [p[0]+seat_w/2, back_top, p[2]-seat_d/2],
+            [p[0]-seat_w/2, back_top, p[2]-seat_d/2],
+        ], dtype=np.float64)
+        back_edges = [(0,1), (1,2), (2,3), (3,0)]
+        
+        # Draw legs
+        for leg in legs:
+            leg_pts = np.array(leg, dtype=np.float64)
+            pts_2d = self._project_points(leg_pts)
+            if pts_2d is not None:
+                pt1 = tuple(pts_2d[0].astype(int))
+                pt2 = tuple(pts_2d[1].astype(int))
+                cv2.line(frame, pt1, pt2, color, 2, cv2.LINE_AA)
+        
+        # Draw seat
+        self._draw_wireframe(frame, seat_verts, seat_edges, color)
+        
+        # Draw backrest
+        self._draw_wireframe(frame, back_verts, back_edges, color)
+        
+        # Draw backrest vertical supports (two posts)
+        supports = [
+            [[p[0]-seat_w/2+leg_w*2, back_bottom, p[2]-seat_d/2],
+             [p[0]-seat_w/2+leg_w*2, back_top, p[2]-seat_d/2]],
+            [[p[0]+seat_w/2-leg_w*2, back_bottom, p[2]-seat_d/2],
+             [p[0]+seat_w/2-leg_w*2, back_top, p[2]-seat_d/2]],
+        ]
+        for support in supports:
+            support_pts = np.array(support, dtype=np.float64)
+            pts_2d = self._project_points(support_pts)
+            if pts_2d is not None:
+                pt1 = tuple(pts_2d[0].astype(int))
+                pt2 = tuple(pts_2d[1].astype(int))
+                cv2.line(frame, pt1, pt2, color, 2, cv2.LINE_AA)
+
     def _draw_world_grid(self, frame: np.ndarray, pose: PoseResult) -> np.ndarray:
-        """Draw a grid at the world origin (ground plane)."""
-        grid_size = 0.3  # 30cm
-        divisions = 6
+        """Draw a grid in front of the camera (ground plane)."""
+        grid_size = 0.4  # 40cm
+        divisions = 8
+        z_offset = 0.5   # Grid starts 50cm in front of camera
         
         lines = []
         for i in range(-divisions, divisions + 1):
-            offset = (i / divisions) * grid_size
-            # Lines along X
-            lines.append(([[-grid_size, 0, offset], [grid_size, 0, offset]], (80, 80, 80)))
-            # Lines along Z
-            lines.append((([[offset, 0, -grid_size], [offset, 0, grid_size]]), (80, 80, 80)))
+            frac = i / divisions
+            x_pos = frac * grid_size
+            z_start = z_offset
+            z_end = z_offset + grid_size
+            
+            # Lines along Z (going away from camera)
+            lines.append(([[x_pos, 0, z_start], [x_pos, 0, z_end]], (80, 80, 80)))
+            
+            # Lines along X (side to side)
+            z_pos = z_offset + (i + divisions) / (2 * divisions) * grid_size
+            lines.append(([[-grid_size, 0, z_pos], [grid_size, 0, z_pos]], (80, 80, 80)))
         
-        # Draw X and Z axis lines brighter
-        lines.append(([[-grid_size, 0, 0], [grid_size, 0, 0]], (0, 0, 150)))  # X axis (red)
-        lines.append((([[0, 0, -grid_size], [0, 0, grid_size]]), (150, 0, 0)))  # Z axis (blue)
+        # Draw center axis lines brighter
+        lines.append(([[0, 0, z_offset], [0, 0, z_offset + grid_size]], (150, 0, 0)))  # Z axis (blue)
+        lines.append(([[-grid_size, 0, z_offset + grid_size/2], [grid_size, 0, z_offset + grid_size/2]], (0, 0, 150)))  # X axis (red)
         
         for line_pts, color in lines:
             pts_world = np.array(line_pts, dtype=np.float64)
@@ -485,11 +598,11 @@ class AnchoredObjectsDemo:
         return frame
 
     def _draw_status(self, frame: np.ndarray, tracking: bool, anchored: bool):
-        """Draw status bar."""
+        """Draw status bar with pose statistics."""
         h, w = frame.shape[:2]
         
-        # Background
-        cv2.rectangle(frame, (w - 200, 5), (w - 5, 75), (0, 0, 0), -1)
+        # Right side status panel
+        cv2.rectangle(frame, (w - 200, 5), (w - 5, 95), (0, 0, 0), -1)
         
         # Tracking status
         if tracking:
@@ -503,6 +616,24 @@ class AnchoredObjectsDemo:
         if self.anchor_system.is_anchored:
             cv2.putText(frame, "ANCHORED", (w - 190, 50),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+        
+        # Bottom-left pose statistics panel
+        cv2.rectangle(frame, (5, h - 70), (200, h - 5), (0, 0, 0), -1)
+        
+        # Calculate rates
+        tracking_rate = (self.tracking_successes / max(self.frame_count, 1)) * 100
+        pose_rate = (self.pose_successes / max(self.frame_count, 1)) * 100
+        
+        # Display stats
+        cv2.putText(frame, f"FPS: {self.fps:.1f}", (15, h - 50),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        cv2.putText(frame, f"Features: {self.feature_count}", (15, h - 35),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        cv2.putText(frame, f"Track: {tracking_rate:.0f}% | Pose: {pose_rate:.0f}%", (15, h - 20),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        
+        # Object count (top-right panel)
+        if self.anchor_system.is_anchored:
             cv2.putText(frame, f"Objects: {len(self.placed_objects)}", (w - 190, 70),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
         else:
@@ -529,7 +660,7 @@ class AnchoredObjectsDemo:
         cv2.putText(frame, "SPACE: Set anchor", (20, y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
         y += 18
-        cv2.putText(frame, "1-4: Place objects", (20, y),
+        cv2.putText(frame, "1-5: Place objects (5=chair)", (20, y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
         y += 18
         cv2.putText(frame, "C: Clear | R: Reset", (20, y),
@@ -542,24 +673,32 @@ class AnchoredObjectsDemo:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
 
     def _place_object(self, object_type: str):
-        """Place an object at the world origin."""
+        """Place an object at a fixed world position."""
         if not self.anchor_system.is_anchored:
             print("Set anchor first! (Press SPACE)")
             return
         
-        # Place object at world origin (0, 0, 0) or offset based on count
-        offset = len(self.placed_objects) * 0.08
-        world_pos = np.array([offset, 0.0, 0.0])  # Spread along X axis
+        # Place objects in a grid pattern at the world origin
+        count = len(self.placed_objects)
+        col = count % 3
+        row = count // 3
+        
+        # Spread objects in X-Z plane (horizontal), at Y=0 (ground level)
+        x = (col - 1) * 0.12  # -0.12, 0, 0.12
+        z = 0.5 + row * 0.12   # Start 50cm away, spread back
+        y = 0.0               # Ground level
+        
+        world_pos = np.array([x, y, z])
         
         obj = AnchoredObject(
             object_type=object_type,
             world_position=world_pos,
-            scale=0.06,
+            scale=0.08,
             color=self.object_colors.get(object_type, (255, 255, 255)),
         )
         
         self.placed_objects.append(obj)
-        print(f"Placed {object_type} at world position {world_pos}")
+        print(f"Placed {object_type} at position ({x:.2f}, {y:.2f}, {z:.2f})")
 
     def _handle_key(self, key: int, pose: PoseResult, tracking_result) -> bool:
         """Handle keyboard input."""
@@ -587,6 +726,10 @@ class AnchoredObjectsDemo:
         elif key == ord('4'):
             self.current_object_type = "box"
             self._place_object("box")
+        
+        elif key == ord('5'):
+            self.current_object_type = "chair"
+            self._place_object("chair")
         
         elif key == ord('c'):
             self.placed_objects.clear()

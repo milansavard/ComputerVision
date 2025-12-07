@@ -228,10 +228,10 @@ You know it's working when:
 
 ✅ `test_opencv.py` shows a test image  
 ✅ `test_camera.py` shows live video with frame counter  
-✅ `run_demo.py` shows live video with controls  
+✅ `main.py` shows AR demo with green feature points  
 ✅ No error messages in Terminal  
 ✅ Camera LED turns on  
-✅ Frame counter updates smoothly  
+✅ FPS counter updates smoothly (bottom-left corner)  
 
 ---
 
@@ -257,7 +257,7 @@ Start with:
 cd /Users/milansavard/Desktop/GitHub/ComputerVision/NETHERGAZE/
 python3 examples/test_opencv.py    # Test OpenCV
 python3 examples/test_camera.py    # Test camera
-python3 examples/run_demo.py       # Run main demo
+python3 src/main.py                # Run AR demo
 ```
 
 Each test will tell you exactly what's wrong and how to fix it!

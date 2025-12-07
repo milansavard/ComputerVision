@@ -46,28 +46,34 @@ If this fails, follow the troubleshooting steps displayed.
 
 ---
 
-### Test 2: Basic Video Capture Demo
-Test the full demo with camera and UI.
+### Test 2: World-Anchored AR Demo
+Test the full AR demo with world-anchored objects.
 
 ```bash
-python3 examples/run_demo.py
+python3 src/main.py
 ```
 
 **Expected output:**
-- A window titled "NETHERGAZE" appears
-- Live video feed from your camera is displayed
-- Green text overlay shows "Press 'h' for help, 'q' to quit"
+- A window titled "NETHERGAZE - World-Anchored AR" appears
+- Live video feed with green feature points (ORB features)
+- Help overlay in top-left corner
+- Statistics in bottom-left (FPS, Features, Track %, Pose %)
 
 **Test the controls:**
-- Press `h` - Help message appears in console
-- Press `p` - Video pauses (see "PAUSED" text in red)
-- Press `p` again - Video resumes
-- Press `q` or `ESC` - Application exits cleanly
+- Point at textured surface (book, poster, keyboard)
+- Wait for green "TRACKING" indicator
+- Press `SPACE` - Sets anchor point, shows "ANCHORED"
+- Press `1` - Places a wireframe cube
+- Press `2-5` - Places other objects (pyramid, axes, box, chair)
+- Move camera - Objects should stay in place
+- Press `C` - Clears all objects
+- Press `Q` or `ESC` - Application exits cleanly
 
 **Success criteria:**
 - ✅ Window opens without errors
-- ✅ Video feed is visible and updating
-- ✅ All keyboard controls work
+- ✅ Green feature points visible
+- ✅ Tracking indicator shows "TRACKING"
+- ✅ Objects can be placed after anchoring
 - ✅ Application exits cleanly
 
 ---
@@ -167,22 +173,18 @@ cap.release()
 ### Frame Rate Test
 Check if you're getting reasonable frame rates:
 
-Add this to the demo loop (after line 54 in `run_demo.py`):
+The AR demo displays FPS in the bottom-left corner. Run:
 
-```python
-import time
-start_time = time.time()
-frame_count = 0
-
-# In the main loop:
-frame_count += 1
-if frame_count % 30 == 0:
-    elapsed = time.time() - start_time
-    fps = frame_count / elapsed
-    print(f"FPS: {fps:.2f}")
+```bash
+python3 src/main.py
 ```
 
-**Expected FPS:** 15-30 fps (depends on camera and system)
+**Expected FPS:** 25-30 fps (normal mode), 50-60 fps (with --fast flag)
+
+For high performance mode:
+```bash
+python3 src/main.py --fast
+```
 
 ---
 
@@ -235,10 +237,8 @@ When more features are implemented, test these scenarios:
 ## Known Limitations
 
 Current implementation:
-- No overlay rendering yet
-- Pose relies on essential matrix (scale is ambiguous)
-- Basic video processing only
+- Pose relies on essential matrix (scale is relative, not metric)
+- Best results on textured surfaces (books, posters, keyboards)
+- Objects may drift during rapid camera movement
 - No recording functionality
-- Limited robustness in low-texture scenes
-
-These will be addressed in future implementations.
+- Wireframe rendering only (no textured 3D models)

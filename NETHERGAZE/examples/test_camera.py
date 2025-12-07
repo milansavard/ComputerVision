@@ -146,7 +146,7 @@ def test_camera_access():
     print(f"\nWorking backend: {working_backend[1]}")
     print(f"Frames captured: {frame_count}")
     print("\nYour camera is ready for NETHERGAZE!")
-    print("Run 'python3 examples/run_demo.py' to start the main demo.")
+    print("Run 'python3 src/main.py' to start the AR demo.")
     print()
     
     return True

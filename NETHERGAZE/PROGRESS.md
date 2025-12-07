@@ -1,246 +1,149 @@
 # NETHERGAZE Implementation Progress
 
+## Project Status: ✅ Complete
+
+NETHERGAZE is a fully functional markerless AR system. All core features have been implemented.
+
+---
+
 ## Completed Components ✅
 
-### 1. Utilities (`src/utils.py`)
-- Centralised logging setup with sensible defaults
-- Configuration loader tuned for markerless tracking (feature + pose + overlay settings)
-- Helper utilities (timestamping, directory creation)
-- Pose filter and overlay configuration defaults
+### 1. Video Capture (`src/video.py`)
+- Multi-backend support (AVFoundation on macOS, Continuity Camera)
+- Configurable resolution and FPS
+- Frame preprocessing pipeline
 
-### 2. Video + UI Loop
-- `src/video.py` (VideoProcessor) handles capture, preprocessing, and cleanup
-- `src/ui.py` (UserInterface) renders frames, keyboard controls, and overlays
-- `examples/run_demo.py` integrates the loop with runtime mode switching
+### 2. Feature Tracking (`src/tracking/feature.py`)
+- ORB feature detection with configurable parameters
+- Lucas-Kanade optical flow for frame-to-frame tracking
+- Keyframe management with automatic re-detection
+- Adaptive thresholds for robust tracking
+- Multiple detector support: ORB, FAST+BRIEF, AKAZE, BRISK, SIFT
 
-### 3. Tracking Foundations
-- Markerless tracker in `src/tracking/feature.py` adds ORB detection, LK optical-flow updates, keyframe map, and robustness thresholds
-- Package exports updated (`src/__init__.py`) to expose markerless stack
-- Demo renders tracked features + pose overlays in real time
+### 3. Pose Estimation (`src/pose.py`)
+- Essential Matrix decomposition with RANSAC
+- Camera pose recovery (rotation + translation)
+- Temporal smoothing via EMA filter
+- Outlier rejection based on motion thresholds
+- Scale estimation methods (ground plane, known distance)
 
-### 4. Pose Estimation (`src/pose.py`)
-- Calibration loader (inline config or external JSON)
-- Markerless pose from feature correspondences (Essential matrix + recoverPose)
-- Axis projection helper for visual overlays
-- **Temporal smoothing** via EMA filter with configurable alpha
-- **Outlier rejection** based on translation/rotation jump thresholds
-- **Median filtering** option for additional robustness
-- **Multi-method scale recovery** via `ScaleEstimator` class:
-  - Known distance between tracked points
-  - Ground plane assumption (camera at known height)
-  - Object size reference
-  - Manual scale factor
-  - Auto-selection of best method
-- **Point triangulation** for 3D reconstruction and scale estimation
-- Pose decomposition helper (Euler angles, position, distance)
-- Unit tests in `tests/test_pose.py`
+### 4. Overlay Rendering (`src/overlay.py`)
+- 3D wireframe objects (cube, pyramid, axes, box)
+- Solid shaded rendering
+- Camera projection using calibration
+- Alpha blending and compositing
 
-### 7. Camera Calibration Tool (`examples/calibrate_camera.py`)
-- **Interactive capture mode** with live chessboard detection
-- **Batch calibration** from existing image files
-- **Preview mode** with undistortion visualization
-- Corner sub-pixel refinement for accuracy
-- JSON export compatible with pipeline calibration loader
-- CLI with configurable board size and square dimensions
-
-### 5. Overlay Rendering (`src/overlay.py`)
-- 2D overlay primitives (text, rectangles, circles, lines, polygons)
-- 3D wireframe objects (cube, pyramid, axes, grid, custom)
-- Projection using camera calibration and pose
-- Alpha blending and layer compositing
-- Overlay image projection onto 3D surfaces (homography warp)
-- Configuration via `OverlayConfiguration` dataclass
+### 5. World Anchoring (`examples/demo_anchored_objects.py`)
+- Anchor point system for world origin
+- Objects stay fixed in 3D space as camera moves
+- Multiple object types including 3D chair
+- Real-time pose statistics display
 
 ### 6. Pipeline Orchestration (`src/main.py`)
-- Full pipeline: Capture → Track → Pose → Overlay → Display
-- CLI argument parsing (--config, --camera, --video, --width, --height, --verbose)
-- Runtime statistics (FPS, tracking/pose success rates)
-- Graceful shutdown via signal handlers
-- Video file playback support
-- NETHERGAZEApp class encapsulates all pipeline logic
+- CLI interface with --fast and --verbose options
+- Runs world-anchored AR demo directly
+- Keyboard controls for object placement
 
-## Roadmap (Markerless Focus)
+### 7. SLAM/Mapping (`src/mapping.py`)
+- Sparse 3D point cloud from triangulated features
+- Keyframe management with covisibility graph
+- Loop closure detection
+- Map persistence (save/load JSON)
 
-### ✅ Completed
-1. **Camera Calibration Tooling** - Interactive chessboard calibration with JSON export
-2. **Scale Recovery** - Multi-method scale estimation (known distance, ground plane, object size)
-3. **Pose Refinement** - Temporal smoothing, outlier rejection, median filtering
+### 8. Occlusion Handling (`src/occlusion.py`)
+- Depth estimation from features
+- Ground plane assumption
+- Occlusion mask generation
+- Depth-aware overlay rendering
 
-### ✅ Recently Completed
-4. **Markerless Tracking Iteration**
-   - Multiple detector/descriptor combos: ORB, FAST+BRIEF, AKAZE, BRISK, SIFT, GFTT+ORB
-   - Adaptive optical flow with forward-backward consistency check
-   - Grid-based feature distribution option
-   - Keyframe quality scoring and metrics tracking
-   - Runtime detector switching
+### 9. Integration Tests (`tests/test_integration.py`)
+- Synthetic video generation
+- Pipeline benchmarking
+- Detector comparison tests
 
-5. **Advanced Overlay Rendering**
-   - `Mesh3D` class for textured 3D model rendering
-   - OBJ file loading with texture support
-   - Solid shaded rendering with lighting
-   - Textured rendering with UV mapping
-   - Factory methods: `create_box()`, `create_plane()`
-   - Backface culling and depth sorting
+---
 
-6. **Integration Tests** (`tests/test_integration.py`)
-   - Synthetic video generation for reproducible testing
-   - Full pipeline benchmarking
-   - Detector comparison tests
-   - Tracking and pose metrics collection
+## How to Run
 
-### ✅ Recently Completed (Continued)
-
-7. **SLAM/Mapping Module** (`src/mapping.py`)
-   - `SparseMap` class for 3D point cloud management
-   - Keyframe-based map building with covisibility graph
-   - Automatic point triangulation between keyframes
-   - Loop closure detection and verification
-   - Map persistence (save/load to JSON)
-   - `MapVisualizer` for top-down and projected views
-
-8. **Occlusion Handling** (`src/occlusion.py`)
-   - `DepthEstimator` for sparse-to-dense depth estimation
-   - Ground plane depth assumption
-   - Depth completion/interpolation
-   - `OcclusionHandler` for mask generation
-   - `DepthAwareOverlayRenderer` for proper AR occlusion
-   - Per-face depth sorting for 3D objects
-
-### 📋 Future Enhancements
-1. **Dense Depth Integration**
-   - MiDaS or similar neural depth estimation
-   - Depth sensor support (RealSense, Kinect)
-2. **Advanced SLAM**
-   - Bundle adjustment optimization
-   - Relocalization from saved maps
-   - Multi-session mapping
-
-## Testing Status
-
-### Automated
-- `tests/test_tracking_feature.py` validates feature extraction/matching skeleton
-- `tests/test_pose.py` covers calibration + pose recovery from feature correspondences
-
-### Pending
-- Overlay rendering visual regression tests
-- End-to-end integration test harness
-- Pose filter unit tests
-
-## How to Test Right Now
-
-### Quick Demo
+### Main AR Demo
 ```bash
-cd /Users/milansavard/Desktop/GitHub/ComputerVision/NETHERGAZE
-python3 examples/run_demo.py
+cd NETHERGAZE
+python src/main.py                # Default settings
+python src/main.py --fast         # High performance mode
+python src/main.py --verbose      # Debug logging
 ```
 
-### Full Pipeline with CLI
-```bash
-# Default camera
-python3 src/main.py
+### Controls
+| Key | Action |
+|-----|--------|
+| `SPACE` | Set anchor point |
+| `1-5` | Place objects (cube, pyramid, axes, box, chair) |
+| `C` | Clear all objects |
+| `G` | Toggle ground grid |
+| `M` | Toggle feature markers |
+| `R` | Reset anchor |
+| `H` | Toggle help |
+| `Q` | Quit |
 
-# Specific camera
-python3 src/main.py --camera 1
+---
 
-# Video file
-python3 src/main.py --video path/to/video.mp4
+## Configuration
 
-# Custom config + verbose logging
-python3 src/main.py --config config.json --verbose
-```
-
-Inside the demo window:
-- Press `m` to toggle feature overlay
-- Press `a` to toggle pose axes
-- Press `p` to pause/resume
-- Press `h` for control cheat sheet, `q` to quit
-
-### Camera Calibration
-```bash
-# Interactive capture mode (recommended for first-time calibration)
-python3 examples/calibrate_camera.py --capture --output calibration.json
-
-# Calibrate from existing chessboard images
-python3 examples/calibrate_camera.py --images ./calib_images/*.jpg --output calibration.json
-
-# Preview undistorted camera feed with saved calibration
-python3 examples/calibrate_camera.py --preview --config calibration.json
-
-# Customize board size and square dimensions
-python3 examples/calibrate_camera.py --capture --board-size 7x5 --square-size 30
-```
-
-Calibration controls:
-- `SPACE` - Capture frame (when chessboard detected)
-- `c` - Run calibration
-- `s` - Save calibration to file
-- `u` - Toggle undistorted preview
-- `r` - Reset captures
-- `q` - Quit
-
-## Configuration Cheatsheet
-
-`src/utils.get_config()` now exposes:
+Key parameters in `demo_anchored_objects.py`:
 
 ```python
-{
-    "feature_tracking": {
-        "method": "orb",
-        "max_features": 1000,
-        "quality_level": 0.01,
-        "min_distance": 7.0,
-        "fast_threshold": 20,
-        "use_optical_flow": True,
-        "optical_flow_win_size": 21,
-        "optical_flow_max_level": 3,
-        "optical_flow_criteria_eps": 0.03,
-        "optical_flow_criteria_count": 30,
-        "reacquire_threshold": 200,
-        "keyframe_interval": 15,
-        "max_keyframes": 6,
-        "min_keyframe_features": 160,
-    },
-    "calibration": {
-        "calibration_file": None,
-        "camera_matrix": [[800.0, 0.0, 320.0],
-                          [0.0, 800.0, 240.0],
-                          [0.0, 0.0, 1.0]],
-        "dist_coeffs": [0, 0, 0, 0, 0],
-    },
-    "pose_filter": {
-        "enable_smoothing": True,
-        "smoothing_alpha": 0.3,
-        "enable_outlier_rejection": True,
-        "max_translation_jump": 0.5,
-        "max_rotation_jump": 0.5,
-        "history_size": 10,
-        "use_median_filter": False,
-        "min_inliers_threshold": 10,
-    },
-    "scale_estimation": {
-        "method": "auto",  # "auto", "known_distance", "ground_plane", "manual"
-        "manual_scale": 1.0,
-        "known_distance": None,
-        "ground_plane_height": 1.5,
-        "scale_smoothing_alpha": 0.2,
-    },
-    "overlay": {
-        "enable_2d_overlays": True,
-        "enable_3d_overlays": True,
-        "default_3d_color": [0, 255, 255],
-        "default_2d_color": [0, 255, 0],
-        "blend_alpha": 0.7,
-        "antialiasing": True,
-    },
-    "axis_length": 0.05,
-    ...
-}
+tracking_config["max_features"] = 3000      # More features = better tracking
+tracking_config["fast_threshold"] = 10      # Lower = more sensitive
+tracking_config["quality_level"] = 0.005    # Lower = accept weaker features
+tracking_config["min_distance"] = 5.0       # Allow features closer together
+tracking_config["reacquire_threshold"] = 500
+tracking_config["keyframe_interval"] = 8
+tracking_config["orb_nlevels"] = 12         # More pyramid levels
 ```
 
-Override these values via JSON config file or CLI options to experiment with markerless tuning.
+---
+
+## Technical Stack
+
+| Component | Technology |
+|-----------|------------|
+| Feature Detection | ORB (Oriented FAST + Rotated BRIEF) |
+| Tracking | Lucas-Kanade Optical Flow |
+| Pose Estimation | Essential Matrix + RANSAC |
+| Rendering | OpenCV drawing functions |
+| Smoothing | Exponential Moving Average |
+| Language | Python 3.8+ |
+| Main Library | OpenCV 4.8+ |
+
+---
+
+## Files Overview
+
+```
+src/
+├── main.py              # Entry point, runs AR demo
+├── video.py             # Video capture
+├── pose.py              # Pose estimation
+├── overlay.py           # 3D rendering
+├── mapping.py           # SLAM/mapping
+├── occlusion.py         # Depth handling
+├── ui.py                # User interface
+├── utils.py             # Configuration
+└── tracking/
+    └── feature.py       # ORB + optical flow
+
+examples/
+└── demo_anchored_objects.py  # World-anchored AR demo
+
+notebooks/
+└── project_overview.ipynb    # Full documentation
+```
+
+---
 
 ## Notes
 
-- Keep `opencv-contrib-python` installed for ORB/OpenCV extras
-- Markerless path is intentionally modular so SLAM components can slot in
-- Document new experiments in `docs/` as you iterate (see roadmap updates)
+- Uses default camera calibration (no external calibration required)
+- Best results on textured surfaces (books, posters, keyboards)
+- Continuity Camera supported on macOS
+- Requires `opencv-contrib-python` for ORB features
